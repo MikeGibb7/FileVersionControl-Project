@@ -1,0 +1,6 @@
+public int foo(int first, int second){
+int sum = 0;
+//calculate total of two numbers
+    sum = first * second;
+    return sum;
+}
