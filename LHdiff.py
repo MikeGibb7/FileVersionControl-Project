@@ -1,6 +1,8 @@
 import sys
-from simhash import Simhash #python-Simhash; might be 128-bit?? [add dependency] 
 import copy
+import string
+import math
+from simhash import Simhash #python-Simhash; might be 128-bit?? [add dependency] 
 
 #REMINDER: REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
@@ -13,12 +15,12 @@ def normalize(filepath):
     with open(filepath) as f:
         lines = f.read().splitlines()
 
-        normalized_lines = []
+        normalizedLines = []
         for line in lines:
             cleaned = " ".join(line.split())
             normalized = cleaned.lower().strip()
-            normalized_lines.append(normalized)
-        return normalized_lines #lowercase, padding removed, redundant internal whitespace removed
+            normalizedLines.append(normalized)
+        return normalizedLines #lowercase, padding removed, redundant internal whitespace removed
     #empty lines are NOT discarded
 
 #Operations
@@ -48,6 +50,31 @@ def normalLevenshtein(s1, s2):
                 dp[i - 1][j - 1] + cost #CHANGE
             )
     return dp[m][n] / max(len(s1), len(s2))
+
+#frequency vector construction
+def charFrequency(text):
+    freq = {char: 0 for char in string.ascii_lowercase} #frequency vector as dictionary
+    for char in text:
+        if char in freq:
+            freq[char] += 1
+    return freq
+
+#CONTEXT SCORE = (A DOT B) / (VLEN(A)VLEN(B))
+#character based approach in accordance with LHDiff paper (no tokenization)
+def cosineSimilarity(s1, s2):
+    #make vectors
+    freq1 = charFrequency(s1)
+    freq2 = charFrequency(s2)
+
+    dotProduct = sum(freq1[char] * freq2[char] for char in string.ascii_lowercase)
+    vlen1 = math.sqrt(sum(freq1[char] ** 2 for char in string.ascii_lowercase))
+    vlen2 = math.sqrt(sum(freq2[char] ** 2 for char in string.ascii_lowercase))
+
+    if vlen1 == 0 or vlen2 == 0:
+        return 0.0
+    
+    return dotProduct / (vlen1 * vlen2)
+
 
 
 if __name__ == '__main__':
@@ -147,7 +174,7 @@ if __name__ == '__main__':
     for r in rightList:
         print(r)'''
 
-    print(mappings) #test output
+    #print(mappings) #test output
     #known behaviour: EMPTY LINES ARE IGNORED, NOT REMOVED 
 
     #MAKING CANDIDATE LISTS
@@ -160,7 +187,7 @@ if __name__ == '__main__':
     for j in range(len(rightList)):
         hashRight.append((rightList[j][0], Simhash(rightList[j][1])))
         #print(f"{hashRight[j]} and {hashRight[j][1].value}") #DELETE
-
+    
     K = 15 #simhash comparison "constant"
 
     candidates = []
@@ -184,11 +211,48 @@ if __name__ == '__main__':
     #print(candidates) 
     #print(len(candidates))
 
+    #TO DO: MERGE ALL O(N^2) LOOPS TOGETHER
     #CONTENT SIMILARITY SCORE
     leftMappings = len(candidates) #candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays
     for i in range(leftMappings):
         for j in range(len(candidates[i])):
-            contentSim = normalLevenshtein(file1[candidates[i][j][0] - 1], file2[candidates[i][j][1] - 1])
-            candidates[i][j][2] = contentSim #OVERWRITE SIMHASH HAMMING DISTANCE WITH CONTENT SIMILARITY
+            contentSim = 1 - normalLevenshtein(file1[candidates[i][j][0] - 1], file2[candidates[i][j][1] - 1])
+            candidates[i][j][2] = 0.6 * contentSim #OVERWRITE SIMHASH HAMMING DISTANCE WITH CONTENT SIMILARITY
             #print(f"{file1[candidates[i][j][0] - 1]} AND {file2[candidates[i][j][1] - 1]} EQUALS {contentSim}")
             
+
+    #CONTEXT SIMILARITY SCORE
+    for i in range(leftMappings):
+        for j in range(len(candidates[i])):
+            leftContext, rightContext = "", ""
+            #range of 4 lines before, target line, 4 lines after (MAX: 9 lines)
+            leftContextInterval = range(max(candidates[i][j][0] - 4, 1), min(candidates[i][j][0] + 4, f1) + 1)
+            rightContextInterval = range(max(candidates[i][j][1] - 4, 1), min(candidates[i][j][1] + 4, f2) + 1) 
+            for n in leftContextInterval:
+                if file1[n - 1] != "":
+                    leftContext += (file1[n - 1] + "\n")
+            for m in rightContextInterval:
+                if file2[m - 1] != "":
+                    rightContext += (file2[m - 1] + "\n")
+            
+            contextSim = cosineSimilarity(leftContext, rightContext)
+            candidates[i][j][2] += 0.4 * contextSim
+            #print(f"{file1[candidates[i][j][0] - 1]} AND {file2[candidates[i][j][1] - 1]} EQUALS {candidates[i][j][2]}")
+
+    #print(candidates)
+    #print(leftContext)
+
+    #SIMILARITY SCORE MAPPING
+    for i in range(leftMappings):
+        maxSim = 0 #reset
+        for j in range(len(candidates[i])):
+            if candidates[i][j][2] > 0.45 and candidates[i][j][2] > maxSim: #0.45 VALIDITY THRESHOLD and bigger sim score
+                maxSim = candidates[i][j][2]
+                bestMatch = (candidates[i][j][0], candidates[i][j][1])
+        if maxSim > 0:
+            mappings.append(bestMatch)
+    
+    mappings.sort()
+    print(mappings) 
+
+    #NEXT: LINE SPLIT DETECTION
