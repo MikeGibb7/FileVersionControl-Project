@@ -27,6 +27,28 @@ ADD = 'A'
 DELETE = 'D'
 CHANGE = 'C'
 
+#standard levenshtein function (should factorize out UnixDiff segment later)
+def normalLevenshtein(s1, s2): 
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)] #DP TABLE
+
+    #Initialization of table
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+
+    # Fill table
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            cost = 0 if s1[i - 1] == s2[j - 1] else 1
+            dp[i][j] = min(
+                dp[i - 1][j] + 1, #DELETE
+                dp[i][j - 1] + 1, #ADD
+                dp[i - 1][j - 1] + cost #CHANGE
+            )
+    return dp[m][n] / max(len(s1), len(s2))
+
 
 if __name__ == '__main__':
     program = sys.argv[0] #CLI implementation | IMPORTANT: REPLACE WITH GUI 
@@ -151,9 +173,9 @@ if __name__ == '__main__':
             if len(bestHashes) > K: 
                 bestHashes.sort(key=lambda x: x[2]) #sort by simhash score
                 if hammingDistance < bestHashes[len(bestHashes) - 1][2]: #if better than worst match 
-                    bestHashes.append((hashLeft[i][0], hashRight[j][0], hammingDistance)) #lines + hash similarity
+                    bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance]) #lines + hash similarity
             else:
-                bestHashes.append((hashLeft[i][0], hashRight[j][0], hammingDistance))
+                bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance])
         
         bestHashes.sort(key=lambda x: x[2]) #final sort
         candidates.append(copy.deepcopy(bestHashes)) #update candidate list
@@ -162,3 +184,11 @@ if __name__ == '__main__':
     #print(candidates) 
     #print(len(candidates))
 
+    #CONTENT SIMILARITY SCORE
+    leftMappings = len(candidates) #candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays
+    for i in range(leftMappings):
+        for j in range(len(candidates[i])):
+            contentSim = normalLevenshtein(file1[candidates[i][j][0] - 1], file2[candidates[i][j][1] - 1])
+            candidates[i][j][2] = contentSim #OVERWRITE SIMHASH HAMMING DISTANCE WITH CONTENT SIMILARITY
+            #print(f"{file1[candidates[i][j][0] - 1]} AND {file2[candidates[i][j][1] - 1]} EQUALS {contentSim}")
+            
