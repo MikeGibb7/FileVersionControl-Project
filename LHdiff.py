@@ -2,14 +2,14 @@ import sys
 import copy
 import string
 import math
-from simhash import Simhash #python-Simhash; might be 128-bit?? [add dependency] 
+from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
 
-#REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
+# REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
-#LHDiff paper: https://www.cs.usask.ca/~croy/papers/2013/LHDiffFullPaper-preprint.pdf
-#very useful paper: http://www.xmailserver.org/diff2.pdf
+# LHDiff paper: https://www.cs.usask.ca/~croy/papers/2013/LHDiffFullPaper-preprint.pdf
+# very useful paper: http://www.xmailserver.org/diff2.pdf
 
-#PREPROCESSING: return each file as a list of normalized lines
+# PREPROCESSING: return each file as a list of normalized lines
 def normalize(filepath):
     with open(filepath) as f:
         lines = f.read().splitlines()
@@ -19,21 +19,21 @@ def normalize(filepath):
             cleaned = " ".join(line.split())
             normalized = cleaned.lower().strip()
             normalizedLines.append(normalized)
-        return normalizedLines #lowercase, padding removed, redundant internal whitespace removed
-    #empty lines are NOT discarded (preserved for line numbering, but practically ignored)
+        return normalizedLines # lowercase, padding removed, redundant internal whitespace removed
+    # empty lines are NOT discarded (preserved for line numbering, but practically ignored)
 
-#Operations
+# Operations
 MATCH = 'M'
 ADD = 'A'
 DELETE = 'D'
 CHANGE = 'C'
 
-#standard levenshtein function (should factorize out UnixDiff segment later)
+# standard levenshtein function (should factorize out UnixDiff segment later)
 def normalLevenshtein(s1, s2): 
     m, n = len(s1), len(s2)
-    dp = [[0] * (n + 1) for _ in range(m + 1)] #DP TABLE
+    dp = [[0] * (n + 1) for _ in range(m + 1)] # DP TABLE
 
-    #Initialization of table
+    # Initialization of table
     for i in range(m + 1):
         dp[i][0] = i
     for j in range(n + 1):
@@ -44,24 +44,24 @@ def normalLevenshtein(s1, s2):
         for j in range(1, n + 1):
             cost = 0 if s1[i - 1] == s2[j - 1] else 1
             dp[i][j] = min(
-                dp[i - 1][j] + 1, #DELETE
-                dp[i][j - 1] + 1, #ADD
-                dp[i - 1][j - 1] + cost #CHANGE
+                dp[i - 1][j] + 1, # DELETE
+                dp[i][j - 1] + 1, # ADD
+                dp[i - 1][j - 1] + cost # CHANGE
             )
     return dp[m][n] / max(len(s1), len(s2))
 
-#frequency vector construction
+# frequency vector construction
 def charFrequency(text):
-    freq = {char: 0 for char in string.ascii_lowercase} #frequency vector as dictionary
+    freq = {char: 0 for char in string.ascii_lowercase} # frequency vector as dictionary
     for char in text:
         if char in freq:
             freq[char] += 1
     return freq
 
-#CONTEXT SCORE = (A DOT B) / (VLEN(A)VLEN(B))
-#character based approach in accordance with LHDiff paper (no tokenization)
+# CONTEXT SCORE = (A DOT B) / (VLEN(A)VLEN(B))
+# character based approach in accordance with LHDiff paper (no tokenization)
 def cosineSimilarity(s1, s2):
-    #make vectors
+    # make vectors
     freq1 = charFrequency(s1)
     freq2 = charFrequency(s2)
 
@@ -77,13 +77,13 @@ def cosineSimilarity(s1, s2):
 
 
 if __name__ == '__main__':
-    program = sys.argv[0] #CLI implementation | IMPORTANT: REPLACE WITH GUI 
+    program = sys.argv[0] # CLI implementation | IMPORTANT: REPLACE WITH GUI 
     if len(sys.argv) < 3:
         print(f"Command: program <file1> <file2>")
         print(f"ERROR: Invalid arg count: 2 files required")
         exit(1)
     
-    #store files as line arrays
+    # store files as line arrays
     file1 = normalize(sys.argv[1])
     file2 = normalize(sys.argv[2])
     f1 = len(file1)
@@ -92,15 +92,15 @@ if __name__ == '__main__':
     distances = []
     actions = []
 
-    #TABLE CONSTRUCTION (AND INITIALIZATION)
+    # TABLE CONSTRUCTION (AND INITIALIZATION)
     for i in range(f1 + 1):
         distances.append([0] * (f2 + 1))
         actions.append(['-'] * (f2 + 1))
 
-    distances[0][0] = 0 #table's top-left entry is "empty" (we'll be iterating through 1 to n instead of 0 to n - 1)
+    distances[0][0] = 0 # table's top-left entry is "empty" (we'll be iterating through 1 to n instead of 0 to n - 1)
     actions [0][0] = MATCH
    
-    #x, y axis setup - horizontal is adding, vertical is deleting
+    # x, y axis setup - horizontal is adding, vertical is deleting
     for n1 in range(1, f1 + 1):
         distances[n1][0] = n1
         actions[n1][0] = DELETE
@@ -109,8 +109,8 @@ if __name__ == '__main__':
         distances[0][n2] = n2
         actions[0][n2] = ADD
 
-    #TRAVERSAL    
-    #fill in table based of matches or "cheapest" operation
+    # TRAVERSAL    
+    # fill in table based of matches or "cheapest" operation
     for n1 in range(1, f1 + 1):
         for n2 in range(1, f2 + 1):
             if file1[n1 - 1] == file2[n2 - 1]:
@@ -119,22 +119,22 @@ if __name__ == '__main__':
             else:
                 delete = (distances[n1 - 1][n2] + 1, DELETE)
                 add = (distances[n1][n2 - 1] + 1, ADD)
-                change = (distances[n1 - 1][n2 - 1] + 2, CHANGE) #substitution == delete + insert (cost of 2) | DIAGONAL movement in table
+                change = (distances[n1 - 1][n2 - 1] + 2, CHANGE) # substitution == delete + insert (cost of 2) | DIAGONAL movement in table
 
-                distances[n1][n2], actions[n1][n2] = min([delete, add, change], key=lambda x: x[0]) #traverse by assigned numeric value
+                distances[n1][n2], actions[n1][n2] = min([delete, add, change], key=lambda x: x[0]) # traverse by assigned numeric value
     
-    #BACKTRACE
+    # BACKTRACE
     leftList = []
     rightList = []
-    mappings = [] #1-to-1s
+    mappings = [] # 1-to-1s
     n1 = f1
     n2 = f2
     while n1 > 0 or n2 > 0:
         action = actions[n1][n2]
 
-        #take most efficient route back to top-left of table, recording mappings and edits along the way
+        # take most efficient route back to top-left of table, recording mappings and edits along the way
         if action == MATCH:
-            if file1[n1 - 1] != "" or file2[n2 - 1] != "": #multiple empty string checks to omit them from being mapped
+            if file1[n1 - 1] != "" or file2[n2 - 1] != "": # multiple empty string checks to omit them from being mapped
                 mappings.append((n1, n2))
             n1 -= 1
             n2 -= 1 
@@ -150,60 +150,61 @@ if __name__ == '__main__':
             n1 -= 1
             n2 -= 1
         else: 
-            assert False, "unreachable" #fail state
+            assert False, "unreachable" # fail state
     
-    #edits.reverse()
+    # edits.reverse()
     leftList.reverse()
     rightList.reverse()
     mappings.reverse()
 
-    #MAKING CANDIDATE LISTS
+    # MAKING CANDIDATE LISTS
     hashLeft = []
     hashRight = []
-    #convert lines to corresponding hashes
+    # convert lines to corresponding hashes
     for i in range(len(leftList)):
         hashLeft.append((leftList[i][0], Simhash(leftList[i][1])))
 
     for j in range(len(rightList)):
         hashRight.append((rightList[j][0], Simhash(rightList[j][1])))
     
-    K = 15 #simhash comparison "constant"
+    K = 15 # simhash comparison "constant"
 
     candidates = []
-    for i in range(len(hashLeft)): #compare all lines of left with all lines of right
+    for i in range(len(hashLeft)): # compare all lines of left with all lines of right
         bestHashes = []
         for j in range(len(hashRight)):
             a = hashLeft[i][1].value
             b = hashRight[j][1].value
-            hammingDistance = bin(a ^ b).count('1') #bit count on XOR of the two hashes
+            hammingDistance = bin(a ^ b).count('1') # bit count on XOR of the two hashes
             if len(bestHashes) > K: 
-                bestHashes.sort(key=lambda x: x[2]) #sort by simhash score
-                if hammingDistance < bestHashes[len(bestHashes) - 1][2]: #if better than worst match 
-                    bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance]) #lines + hash similarity
+                bestHashes.sort(key=lambda x: x[2]) # sort by simhash score
+                if hammingDistance < bestHashes[len(bestHashes) - 1][2]: # if better than worst match 
+                    bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance]) # lines + hash similarity
             else:
                 bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance])
         
-        bestHashes.sort(key=lambda x: x[2]) #final sort
-        candidates.append(copy.deepcopy(bestHashes)) #update candidate list
+        bestHashes.sort(key=lambda x: x[2]) # final sort
+        candidates.append(copy.deepcopy(bestHashes)) # update candidate list
 
     candidates.sort(key=lambda x: x[0]) 
 
  
-    #COMBINED SIMILARITY SCORE AND MATCHING
-    leftMappings = len(candidates) #candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays    
+    # COMBINED SIMILARITY SCORE AND MATCHING
+    finalCandidates = []
+    leftMappings = len(candidates) # candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays    
     for i in range(leftMappings):
         maxSim = 0
         for j in range(len(candidates[i])):
             leftLine = candidates[i][j][0] 
             rightLine = candidates[i][j][1]
 
-            #CONTENT SIMILARITY SCORE
+            # CONTENT SIMILARITY SCORE
             contentSim = 1 - normalLevenshtein(file1[leftLine - 1], file2[rightLine - 1])
             candidates[i][j][2] = 0.6 * contentSim
 
-            #CONTEXT SIMILARITY SCORE
+            # CONTEXT SIMILARITY SCORE
             leftContext, rightContext = "", ""
-            #(max) range of 4 lines before, target line, 4 lines after (MAX: 9 lines)
+            # (max) range of 4 lines before, target line, 4 lines after (MAX: 9 lines)
             leftContextInterval = range(max(leftLine - 4, 1), min(leftLine + 4, f1) + 1)
             rightContextInterval = range(max(rightLine - 4, 1), min(rightLine + 4, f2) + 1) 
             for n in leftContextInterval:
@@ -215,16 +216,68 @@ if __name__ == '__main__':
             
             contextSim = cosineSimilarity(leftContext, rightContext)
             candidates[i][j][2] += 0.4 * contextSim
-            
-            #SIMILARITY SCORE MAPPING
-            if candidates[i][j][2] > 0.45 and candidates[i][j][2] > maxSim: #0.45 VALIDITY THRESHOLD and bigger sim score
+            if candidates[i][j][2] > 0.45: finalCandidates.append(candidates[i][j])
+
+            # SIMILARITY SCORE MAPPING
+            '''if candidates[i][j][2] > 0.45 and candidates[i][j][2] > maxSim: # 0.45 VALIDITY THRESHOLD and bigger sim score
                 maxSim = candidates[i][j][2]
                 bestMatch = (leftLine, rightLine)
+                r = next((r for r in rightList if r[0] == rightLine), None) # track matched right line
 
         if maxSim > 0:
             mappings.append(bestMatch)
-    
+            print(bestMatch)
+            l = next(l for l in leftList if l[0] == leftLine) # track matched left line
+            leftList.remove(l)
+            if r is not None:
+                rightList.remove(r)'''
+            
+
+    # |KNOWN "bug": the same two lines from file1 can be mapped with a single line from file 2 (add detection and resolution)| FIXED?
+    finalCandidates.sort(reverse=True, key=lambda x: x[2]) #IMPORTANT TO SORT THE CANDIDATES IN DESCENDING ORDER
+    f = 0
+    while f < len(finalCandidates):
+        finalCandidates = [map for map in finalCandidates if not (finalCandidates.index(map) != f and map[0] == finalCandidates[f][0])] #removes inferior left to right mappings
+        finalCandidates = [map for map in finalCandidates if not (finalCandidates.index(map) != f and finalCandidates[f][1] == map[1])] #removes mappings to same line on right
+        f += 1
+
+    for m in range(len(finalCandidates)):
+        mappings.append((finalCandidates[m][0], finalCandidates[m][1]))
     mappings.sort()
+
+    # REMOVE NEWLY MAPPED LINES FROM LISTS
+    l = 0 
+    while l < len(leftList):
+        for c in range(len(finalCandidates)):
+            if leftList[l][0] == finalCandidates[c][0]:
+                leftList.pop(l)
+                l -= 1
+                break
+        l += 1
+
+    r = 0
+    while r < len(rightList):
+        for c in range(len(finalCandidates)):
+            if rightList[r][0] == finalCandidates[c][1]:
+                rightList.pop(r)
+                r -= 1
+                break
+        r += 1
+
+    #still unmapped lines
+    print(leftList)        
+    print(rightList)
+
+    '''for f in range(len(finalCandidates)):
+        if f != 0 and finalCandidates[f][0] == finalCandidates[f-1][0]:
+            continue
+        mappings.append((finalCandidates[f][0], finalCandidates[f][1]))'''
+            
+    '''print()
+    #print(candidates)
+    print(leftList)
+    print(rightList)
+    mappings.sort()'''
     print(mappings) 
 
-    #NEXT: LINE SPLIT DETECTION
+    # NEXT: LINE SPLIT DETECTION
