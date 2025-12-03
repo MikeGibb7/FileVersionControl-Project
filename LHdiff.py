@@ -152,7 +152,6 @@ if __name__ == '__main__':
         else: 
             assert False, "unreachable" # fail state
     
-    # edits.reverse()
     leftList.reverse()
     rightList.reverse()
     mappings.reverse()
@@ -216,24 +215,9 @@ if __name__ == '__main__':
             
             contextSim = cosineSimilarity(leftContext, rightContext)
             candidates[i][j][2] += 0.4 * contextSim
-            if candidates[i][j][2] > 0.45: finalCandidates.append(candidates[i][j])
+            if candidates[i][j][2] > 0.45: finalCandidates.append(candidates[i][j]) #Filter out bad mappings (below 0.45 threshold)
 
-            # SIMILARITY SCORE MAPPING
-            '''if candidates[i][j][2] > 0.45 and candidates[i][j][2] > maxSim: # 0.45 VALIDITY THRESHOLD and bigger sim score
-                maxSim = candidates[i][j][2]
-                bestMatch = (leftLine, rightLine)
-                r = next((r for r in rightList if r[0] == rightLine), None) # track matched right line
-
-        if maxSim > 0:
-            mappings.append(bestMatch)
-            print(bestMatch)
-            l = next(l for l in leftList if l[0] == leftLine) # track matched left line
-            leftList.remove(l)
-            if r is not None:
-                rightList.remove(r)'''
-            
-
-    # |KNOWN "bug": the same two lines from file1 can be mapped with a single line from file 2 (add detection and resolution)| FIXED?
+    #SELECT BEST MAPPINGS (INJECTIVE A -> B with no repeats or overlapping)
     finalCandidates.sort(reverse=True, key=lambda x: x[2]) #IMPORTANT TO SORT THE CANDIDATES IN DESCENDING ORDER
     f = 0
     while f < len(finalCandidates):
@@ -243,9 +227,8 @@ if __name__ == '__main__':
 
     for m in range(len(finalCandidates)):
         mappings.append((finalCandidates[m][0], finalCandidates[m][1]))
-    mappings.sort()
 
-    # REMOVE NEWLY MAPPED LINES FROM LISTS
+    # REMOVE NEWLY MAPPED LINES from candidate lists
     l = 0 
     while l < len(leftList):
         for c in range(len(finalCandidates)):
@@ -264,20 +247,51 @@ if __name__ == '__main__':
                 break
         r += 1
 
-    #still unmapped lines
-    print(leftList)        
-    print(rightList)
-
-    '''for f in range(len(finalCandidates)):
-        if f != 0 and finalCandidates[f][0] == finalCandidates[f-1][0]:
-            continue
-        mappings.append((finalCandidates[f][0], finalCandidates[f][1]))'''
-            
-    '''print()
-    #print(candidates)
-    print(leftList)
-    print(rightList)
-    mappings.sort()'''
-    print(mappings) 
+    #REMOVE NON-CONSECUTIVE RIGHT LIST LINES (Not eligible for line split detection)
+    r = 0
+    while r < len(rightList):
+        current = rightList[r][0]
+        hasLeftNeighbour = r > 0 and rightList[r - 1][0] == current - 1
+        hasRightNeighbour = r < len(rightList) - 1 and rightList[r + 1][0] == current + 1
+        if not (hasLeftNeighbour or hasRightNeighbour):
+            rightList.pop(r)
+        else:
+            r += 1
 
     # NEXT: LINE SPLIT DETECTION
+    # admittedly kind of a mess (most convoluted section): trying to iterate through the unmapped lines from right list, their concatenations
+    if leftList:
+        for l in leftList:
+            lineSplitsRight = []
+            for i in range(len(rightList) - 1):
+                maxLineSplitSim = 0
+                concatenate = rightList[i][1]
+                hasRightNeighbour = rightList[i][0] == rightList[i+1][0] - 1    
+                subLineSplits = [rightList[i][0]]
+                for j in range(1, min(8, len(rightList) - i)): # concatenate a maximum of 8 lines
+                    if hasRightNeighbour:
+                        if rightList[i + j][0] - rightList[i][0] <= 8: # make sure line being concatenated is within the 8 limit
+                            concatenate += rightList[i + j][1]
+                        else:
+                            break
+
+                        distance = 1 - normalLevenshtein(l[1], concatenate)
+
+                        if distance >= maxLineSplitSim: # [swap distance > max with distance >= max]
+                            maxLineSplitSim = distance
+                        else:
+                            break
+                        subLineSplits.append(rightList[i + j][0])
+                    else:
+                        break
+                
+                subLineSplits.insert(0, maxLineSplitSim) # levenshtein score to front for easy access
+                lineSplitsRight.append(subLineSplits)
+            print(maxLineSplitSim)
+            if maxLineSplitSim > 0.85: # VERY HIGH THRESHOLD FOR LINE SPLIT MAPPINGS
+                lineSplitsRight.sort(reverse=True)
+                mappings.append((l[0], lineSplitsRight[0][1:])) #add best multi-line mapping to specific left list line to list
+
+    # From some tests, many line splits are not mapped because parts of them are directly mapped instead (threshold for regular mappings might be too low)
+    mappings.sort()
+    print(mappings) #FINAL OUTPUT!!!!
