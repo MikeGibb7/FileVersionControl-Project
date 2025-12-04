@@ -34,4 +34,53 @@ Detects when a line appears in both files but at different locations.
 Install the required dependency:
 
 ```bash
-pip install simhash
+pip install simhash 
+```
+## Usage
+
+
+
+### Run the LHDiff script from your terminal:
+
+
+
+python LHdiff.py <path_to_file_A> <path_to_file_B>
+
+
+
+## Example
+
+python LHdiff.py New_File_Versions/NewFile1.txt Old_File_Versions/OldFile1.txt
+
+
+
+## Example Output
+
+[(1, 1), (2, 3), (3, 2), (4, 4), (5, 5), (6, 6)]
+
+
+
+## Interpretation
+
+
+
+(1, 1) → Line 1 in File A matches Line 1 in File B
+
+
+
+(2, 3) → Line 2 in File A corresponds to Line 3 in File B (moved)
+
+
+
+(3, 2) → Line 3 in File A corresponds to Line 2 in File B (moved)
+
+
+
+(n, m) pairs show all detected matches, moves, and alignments
+
+
+
+
+
+
+
