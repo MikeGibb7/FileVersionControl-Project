@@ -260,6 +260,7 @@ if __name__ == '__main__':
 
     # NEXT: LINE SPLIT DETECTION
     # admittedly kind of a mess (most convoluted section): trying to iterate through the unmapped lines from right list, their concatenations
+    maxLineSplitSim = 0
     if leftList:
         for l in leftList:
             lineSplitsRight = []
@@ -287,10 +288,12 @@ if __name__ == '__main__':
                 
                 subLineSplits.insert(0, maxLineSplitSim) # levenshtein score to front for easy access
                 lineSplitsRight.append(subLineSplits)
-            print(maxLineSplitSim)
+
             if maxLineSplitSim > 0.85: # VERY HIGH THRESHOLD FOR LINE SPLIT MAPPINGS
                 lineSplitsRight.sort(reverse=True)
                 mappings.append((l[0], lineSplitsRight[0][1:])) #add best multi-line mapping to specific left list line to list
+
+            #might need to consider implementing logic for edge cases where leftlist lines overlap on their mappings to rightlist line splits? (unlikely)
 
     # From some tests, many line splits are not mapped because parts of them are directly mapped instead (threshold for regular mappings might be too low)
     mappings.sort()
