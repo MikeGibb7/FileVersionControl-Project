@@ -8,22 +8,23 @@ def File(x):
     # project root (go up one directory)
     dirRoot = path.join(dirMain, "..")
 
-    # fp = input("Enter the "+x+" file: ")
+    fp = input("Enter the "+x+" file: ")
 
     if (x == "old"):
         #New_File_Versions Folder
-        dirData = path.join(dirRoot, "New_File_Versions")
-        dirPath = path.join(dirData, "NewFile1.txt")
+        dirData = path.join(dirRoot, "Old_File_Versions")
+        dirPath = path.join(dirData, fp)
     elif (x == "new"):
         #Old_File_Versions Folder
-        dirData = path.join(dirRoot, "Old_File_Versions")
-        dirPath = path.join(dirData, "OldFile1.txt")
+        dirData = path.join(dirRoot, "New_File_Versions")
+        dirPath = path.join(dirData, fp)
 
     try:
         file = open(dirPath, "r")
         return file.read()
     except FileNotFoundError:
         print("File not found.")
+        exit(1)
 
 
 root = tk.Tk()
