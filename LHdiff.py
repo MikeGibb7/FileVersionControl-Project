@@ -4,6 +4,8 @@ import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
 import heapq
+import subprocess
+import re
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
@@ -109,6 +111,58 @@ def cosineSimilarity(s1, s2):
         return 0.0
     
     return dotProduct / (vlen1 * vlen2)
+
+def get_commit_message_for_line(filepath, line_num):
+    """Get the commit message that last modified a specific line using git blame."""
+    try:
+        # git blame returns: <hash> (<author> <date> <time> <tz> <line_num>) <line_content>
+        result = subprocess.run(
+            ['git', 'blame', '-L', f'{line_num},{line_num}', '--porcelain', filepath],
+            cwd=subprocess.os.path.dirname(filepath) or '.',
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+        
+        lines = result.stdout.strip().split('\n')
+        if not lines or not lines[0]:
+            return None
+        
+        # Extract commit hash from first line
+        commit_hash = lines[0].split()[0]
+        
+        # Get full commit message
+        msg_result = subprocess.run(
+            ['git', 'log', '-1', '--pretty=%B', commit_hash],
+            cwd=subprocess.os.path.dirname(filepath) or '.',
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return msg_result.stdout.strip() if msg_result.returncode == 0 else None
+    except Exception:
+        return None
+
+def classify_change_by_commit_message(commit_msg):
+    """Classify change based on commit message keywords."""
+    if not commit_msg:
+        return 'unknown'
+    
+    msg_lower = commit_msg.lower()
+    
+    fix_keywords = ['fix', 'bug', 'patch', 'hotfix', 'resolve', 'issue', 'crash', 'error', 'revert', 'optimization']
+    intro_keywords = ['feature', 'add', 'new', 'implement', 'refactor', 'wip', 'todo', 'draft']
+    
+    fix_score = sum(1 for kw in fix_keywords if kw in msg_lower)
+    intro_score = sum(1 for kw in intro_keywords if kw in msg_lower)
+    
+    if fix_score > intro_score:
+        return 'bug_fix'
+    elif intro_score > fix_score:
+        return 'bug_intro'
+    return 'neutral'
 
 
 if __name__ == '__main__':
@@ -304,7 +358,42 @@ if __name__ == '__main__':
 
     # From some tests, many line splits are not mapped because parts of them are directly mapped instead (threshold for regular mappings might be too low)
     mappings.sort()
-    print(mappings) #FINAL OUTPUT!!!!
+    
+    # Classify each mapping by commit message using git blame
+    classifications = []
+    for m in mappings:
+        if isinstance(m[1], list):
+            # Line split: check first line in the split
+            commit_msg = get_commit_message_for_line(sys.argv[2], m[1][0])
+        else:
+            # Single line: check the mapped line in file2
+            commit_msg = get_commit_message_for_line(sys.argv[2], m[1])
+        
+        ctype = classify_change_by_commit_message(commit_msg)
+        classifications.append(ctype)
+    
+    # Aggregate classifications to determine overall commit type
+    bug_fixes = classifications.count('bug_fix')
+    bug_intros = classifications.count('bug_intro')
+    neutrals = classifications.count('neutral')
+    unknowns = classifications.count('unknown')
+    
+    # Determine overall commit classification
+    if bug_fixes > bug_intros:
+        overall_type = 'bug_fix'
+    elif bug_intros > bug_fixes:
+        overall_type = 'bug_intro'
+    else:
+        overall_type = 'neutral'
+    
+    # Print summary
+    print(f"COMMIT CLASSIFICATION: {overall_type}")
+    print(f"  Bug fixes: {bug_fixes}")
+    print(f"  Bug introductions: {bug_intros}")
+    print(f"  Neutral: {neutrals}")
+    print(f"  Unknown: {unknowns}")
+    print(f"  Total mappings: {len(mappings)}")
+    
     # close file handles held by caches
     try:
         file1.close()
