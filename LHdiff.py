@@ -51,7 +51,10 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
 
     file1 = Normalize(oldFile)
     file2 = Normalize(newFile)
-    lhDiff = LHDiff(file1, file2)
+    # Pass full file paths so git blame can work in the GUI
+    old_full_path = path.join(path.dirname(path.abspath(__file__)), "Old_File_Versions", fpOld)
+    new_full_path = path.join(path.dirname(path.abspath(__file__)), "New_File_Versions", fpNew)
+    lhDiff = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
     print(lhDiff)
     
 def File(x, fp):
@@ -229,7 +232,7 @@ def classify_change_by_commit_message(commit_msg):
         return 'bug_intro'
     return 'neutral'
 
-def LHDiff(file1, file2):
+def LHDiff(file1, file2, old_path=None, new_path=None):
     # Materialize only when needed (DP requires indexing)
     # use on-demand file-backed cache (much smaller peak memory than storing all lines)
     f1 = len(file1)
@@ -417,13 +420,19 @@ def LHDiff(file1, file2):
     
     # Classify each mapping by commit message using git blame
     classifications = []
+    # Use provided new_path if available, otherwise fall back to CLI arg
+    blame_file = new_path if new_path else (sys.argv[2] if len(sys.argv) > 2 else None)
+    
     for m in mappings:
-        if isinstance(m[1], list):
-            # Line split: check first line in the split
-            commit_msg = get_commit_message_for_line(sys.argv[2], m[1][0])
+        if blame_file is None:
+            commit_msg = None
         else:
-            # Single line: check the mapped line in file2
-            commit_msg = get_commit_message_for_line(sys.argv[2], m[1])
+            if isinstance(m[1], list):
+                # Line split: check first line in the split
+                commit_msg = get_commit_message_for_line(blame_file, m[1][0])
+            else:
+                # Single line: check the mapped line in file2
+                commit_msg = get_commit_message_for_line(blame_file, m[1])
         
         ctype = classify_change_by_commit_message(commit_msg)
         classifications.append(ctype)
