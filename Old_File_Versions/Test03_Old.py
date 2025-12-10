@@ -5,6 +5,7 @@
 # Author/Owner: Vanvians
 # Purpose in this Project: [for testing changes in a larger file]
 # Status: Modified slightly for current project requirements.
+# Not to be copied or used outside of this project without permission from the original author.
 # REUSED CODE SNIPPET
 """
 tracker.py

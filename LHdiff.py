@@ -4,8 +4,6 @@ import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
 import heapq
-import time
-import psutil
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
@@ -20,6 +18,45 @@ def normalize(filepath):
             cleaned = " ".join(line.split())
             normalized = cleaned.lower().strip()
             yield normalized
+
+# add a compact on-demand line cache to avoid materializing all lines
+class LineCache:
+    def __init__(self, path, encoding='utf-8'):
+        self.path = path
+        self.encoding = encoding
+        # open file in binary mode and build offsets (small memory: 8 bytes * #lines)
+        self._f = open(path, 'rb')
+        self._offsets = []
+        pos = self._f.tell()
+        line = self._f.readline()
+        while line:
+            self._offsets.append(pos)
+            pos = self._f.tell()
+            line = self._f.readline()
+        self._len = len(self._offsets)
+
+    def __len__(self):
+        return self._len
+
+    def __getitem__(self, idx):
+        if idx < 0:
+            idx += self._len
+        if idx < 0 or idx >= self._len:
+            raise IndexError("LineCache index out of range")
+        self._f.seek(self._offsets[idx])
+        bline = self._f.readline()
+        try:
+            line = bline.decode(self.encoding, errors='replace')
+        except Exception:
+            line = bline.decode('latin-1', errors='replace')
+        cleaned = " ".join(line.split())
+        return cleaned.lower().strip()
+
+    def close(self):
+        try:
+            self._f.close()
+        except Exception:
+            pass
 
 # Operations
 MATCH = 'M'
@@ -73,44 +110,18 @@ def cosineSimilarity(s1, s2):
     
     return dotProduct / (vlen1 * vlen2)
 
-def profile_io(filepath, report_every=10000):
-    """Stream the file using normalize() and report time + RSS memory periodically."""
-    proc = psutil.Process()
-    start_mem = proc.memory_info().rss
-    start_t = time.perf_counter()
-    count = 0
-    print(f"START IO PROFILE: {filepath} start_mem={start_mem} bytes")
-    for line in normalize(filepath):
-        count += 1
-        if (count % report_every) == 0:
-            cur_mem = proc.memory_info().rss
-            elapsed = time.perf_counter() - start_t
-            print(f"READ {count} lines; elapsed={elapsed:.3f}s; MEM={cur_mem} bytes")
-    elapsed = time.perf_counter() - start_t
-    end_mem = proc.memory_info().rss
-    print(f"END IO PROFILE: {filepath} lines={count} elapsed={elapsed:.3f}s start_mem={start_mem} end_mem={end_mem} bytes")
-
 
 if __name__ == '__main__':
     program = sys.argv[0] # CLI implementation | IMPORTANT: REPLACE WITH GUI 
-    if '--profile-io' in sys.argv:
-        # usage: python LHdiff.py --profile-io file1 [file2 ...]
-        idx = sys.argv.index('--profile-io')
-        targets = sys.argv[idx + 1:]
-        if not targets:
-            print("Usage: python LHdiff.py --profile-io <file1> [file2 ...]")
-            sys.exit(1)
-        for t in targets:
-            profile_io(t)
-        sys.exit(0)
     if len(sys.argv) < 3:
         print(f"Command: program <file1> <file2>")
         print(f"ERROR: Invalid arg count: 2 files required")
         exit(1)
     
     # Materialize only when needed (DP requires indexing)
-    file1 = list(normalize(sys.argv[1]))
-    file2 = list(normalize(sys.argv[2]))
+    # use on-demand file-backed cache (much smaller peak memory than storing all lines)
+    file1 = LineCache(sys.argv[1])
+    file2 = LineCache(sys.argv[2])
     f1 = len(file1)
     f2 = len(file2)
 
@@ -294,3 +305,9 @@ if __name__ == '__main__':
     # From some tests, many line splits are not mapped because parts of them are directly mapped instead (threshold for regular mappings might be too low)
     mappings.sort()
     print(mappings) #FINAL OUTPUT!!!!
+    # close file handles held by caches
+    try:
+        file1.close()
+        file2.close()
+    except Exception:
+        pass
