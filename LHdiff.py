@@ -4,22 +4,86 @@ import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
 import heapq
+import tkinter as tk
+import os.path as path
 import subprocess
-import re
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
 # LHDiff paper: https://www.cs.usask.ca/~croy/papers/2013/LHDiffFullPaper-preprint.pdf
 # very useful paper: http://www.xmailserver.org/diff2.pdf
 
+def InputGUI(frame, message, col):
+    tk.Label(frame, text=message).grid(row=0, column=col, pady=(0,5))
+    entry = tk.Entry(frame, width=30)
+    entry.grid(row=1, column=col, padx=10)
+    return entry
+
+def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
+    global fpOld, fpNew
+    fpOld = oldEntry.get().strip()
+    fpNew = newEntry.get().strip()
+    # Clears the previous message
+    error.config(text="")
+
+    if fpOld == "" or fpNew == "":
+        error.config(text="Please enter both files") 
+        return
+
+    oldFile = File("old", fpOld)
+    newFile = File("new", fpNew)
+
+    if not(oldFile) and not(newFile):
+        error.config(text="Old and new files not found, please try again")
+        return
+    elif not(oldFile):
+        error.config(text="Old file not found, please try again")
+        return
+    elif not(newFile):
+        error.config(text="New file not found, please try again")
+        return
+
+    oldText.delete("1.0", tk.END)
+    oldText.insert("1.0", oldFile)
+
+    newText.delete("1.0", tk.END)
+    newText.insert("1.0", newFile)
+
+    file1 = Normalize(oldFile)
+    file2 = Normalize(newFile)
+    lhDiff = LHDiff(file1, file2)
+    
+def File(x, fp):
+    # Folder with the GUI's directory. 
+    dirRoot = path.dirname(path.abspath(__file__))
+
+    #fp = input("Enter the "+x+" file: ")
+
+    if (x == "old"):
+        #New_File_Versions Folder.
+        dirData = path.join(dirRoot, "Old_File_Versions")
+        dirPath = path.join(dirData, fp)
+    elif (x == "new"):
+        #Old_File_Versions Folder.
+        dirData = path.join(dirRoot, "New_File_Versions")
+        dirPath = path.join(dirData, fp)
+
+    try:
+        file = open(dirPath, "r")
+        return file.read()
+    except FileNotFoundError:
+        return 0
+    
 # PREPROCESSING: stream normalized lines from file with lazy evaluation
-def normalize(filepath):
+def Normalize(text: str):
     #Generator that yields normalized lines one at a time
-    with open(filepath, encoding='utf-8', buffering=8192) as f:  # 8KB buffer for faster I/O
-        for line in f:
-            cleaned = " ".join(line.split())
-            normalized = cleaned.lower().strip()
-            yield normalized
+    f = text.splitlines()
+    normalizedLines = []
+    for i in f:
+        cleaned = " ".join(i.split())
+        normalized = cleaned.lower().strip()
+        normalizedLines.append(normalized)
+    return normalizedLines
 
 # add a compact on-demand line cache to avoid materializing all lines
 class LineCache:
@@ -164,18 +228,9 @@ def classify_change_by_commit_message(commit_msg):
         return 'bug_intro'
     return 'neutral'
 
-
-if __name__ == '__main__':
-    program = sys.argv[0] # CLI implementation | IMPORTANT: REPLACE WITH GUI 
-    if len(sys.argv) < 3:
-        print(f"Command: program <file1> <file2>")
-        print(f"ERROR: Invalid arg count: 2 files required")
-        exit(1)
-    
+def LHDiff(file1, file2):
     # Materialize only when needed (DP requires indexing)
     # use on-demand file-backed cache (much smaller peak memory than storing all lines)
-    file1 = LineCache(sys.argv[1])
-    file2 = LineCache(sys.argv[2])
     f1 = len(file1)
     f2 = len(file2)
 
@@ -400,3 +455,43 @@ if __name__ == '__main__':
         file2.close()
     except Exception:
         pass
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    root.title("LHdiff")
+
+    top = tk.Frame(root)
+    top.pack(fill="x", padx=10, pady=10)
+    top.grid_columnconfigure(0, weight=1)
+    top.grid_columnconfigure(1, weight=1)
+
+    oldEntry = InputGUI(top, "Enter the old file: ", 0)
+    newEntry = InputGUI(top, "Enter the new file: ", 1)
+
+    error = tk.Label(top, text="", fg="red")
+    error.grid(row=3, column=0, columnspan=2)
+
+    bottom = tk.Frame(root)
+    bottom.pack(fill="both", expand=True)
+
+    left = tk.Frame(bottom)
+    right = tk.Frame(bottom)
+    left.pack(side="left", fill="both", expand=True)
+    right.pack(side="right", fill="both", expand=True)
+
+    tk.Label(left, text="Old File:", font=("Arial", 16, "bold")).pack(anchor="w")
+    tk.Label(right, text="New File:", font=("Arial", 16, "bold")).pack(anchor="w")
+
+    oldText = tk.Text(left, wrap="word")
+    oldText.pack(side="left", fill="both", expand=True)
+
+    newText = tk.Text(right, wrap="word")
+    newText.pack(side="right", fill="both", expand=True)
+
+    tk.Button(
+        top, 
+        text="Enter", 
+        command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText, error)
+    ).grid(row=2, column=0, columnspan=2, pady=10)
+
+    root.mainloop()
