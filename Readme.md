@@ -40,18 +40,13 @@ pip install simhash
 
 
 
-### Run the LHDiff script from your terminal:
+### Run the GUI script from your terminal:
 
 
 
-python LHdiff.py <path_to_file_A> <path_to_file_B>
+python test.py
 
-
-
-## Example
-
-python LHdiff.py New_File_Versions/NewFile1.txt Old_File_Versions/OldFile1.txt
-
+This will trigger the GUI, where you can enter the test files and after clicking the enter button, results will be printed in the terminal
 
 
 ## Example Output
