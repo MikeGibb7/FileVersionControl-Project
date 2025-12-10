@@ -52,6 +52,7 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
     file1 = Normalize(oldFile)
     file2 = Normalize(newFile)
     lhDiff = LHDiff(file1, file2)
+    print(lhDiff)
     
 def File(x, fp):
     # Folder with the GUI's directory. 
@@ -455,6 +456,9 @@ def LHDiff(file1, file2):
         file2.close()
     except Exception:
         pass
+    
+    mappings.sort()
+    return mappings
 
 if __name__ == '__main__':
     root = tk.Tk()
