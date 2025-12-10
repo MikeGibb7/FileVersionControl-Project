@@ -3,24 +3,127 @@ import copy
 import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
+import heapq
+import tkinter as tk
+import os.path as path
+import subprocess
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
 # LHDiff paper: https://www.cs.usask.ca/~croy/papers/2013/LHDiffFullPaper-preprint.pdf
 # very useful paper: http://www.xmailserver.org/diff2.pdf
 
-# PREPROCESSING: return each file as a list of normalized lines
-def normalize(filepath):
-    with open(filepath) as f:
-        lines = f.read().splitlines()
+def InputGUI(frame, message, col):
+    tk.Label(frame, text=message).grid(row=0, column=col, pady=(0,5))
+    entry = tk.Entry(frame, width=30)
+    entry.grid(row=1, column=col, padx=10)
+    return entry
 
-        normalizedLines = []
-        for line in lines:
-            cleaned = " ".join(line.split())
-            normalized = cleaned.lower().strip()
-            normalizedLines.append(normalized)
-        return normalizedLines # lowercase, padding removed, redundant internal whitespace removed
-    # empty lines are NOT discarded (preserved for line numbering, but practically ignored)
+def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
+    global fpOld, fpNew
+    fpOld = oldEntry.get().strip()
+    fpNew = newEntry.get().strip()
+    # Clears the previous message
+    error.config(text="")
+
+    if fpOld == "" or fpNew == "":
+        error.config(text="Please enter both files") 
+        return
+
+    oldFile = File("old", fpOld)
+    newFile = File("new", fpNew)
+
+    if not(oldFile) and not(newFile):
+        error.config(text="Old and new files not found, please try again")
+        return
+    elif not(oldFile):
+        error.config(text="Old file not found, please try again")
+        return
+    elif not(newFile):
+        error.config(text="New file not found, please try again")
+        return
+
+    oldText.delete("1.0", tk.END)
+    oldText.insert("1.0", oldFile)
+
+    newText.delete("1.0", tk.END)
+    newText.insert("1.0", newFile)
+
+    file1 = Normalize(oldFile)
+    file2 = Normalize(newFile)
+    lhDiff = LHDiff(file1, file2)
+    print(lhDiff)
+    
+def File(x, fp):
+    # Folder with the GUI's directory. 
+    dirRoot = path.dirname(path.abspath(__file__))
+
+    #fp = input("Enter the "+x+" file: ")
+
+    if (x == "old"):
+        #New_File_Versions Folder.
+        dirData = path.join(dirRoot, "Old_File_Versions")
+        dirPath = path.join(dirData, fp)
+    elif (x == "new"):
+        #Old_File_Versions Folder.
+        dirData = path.join(dirRoot, "New_File_Versions")
+        dirPath = path.join(dirData, fp)
+
+    try:
+        file = open(dirPath, "r")
+        return file.read()
+    except FileNotFoundError:
+        return 0
+    
+# PREPROCESSING: stream normalized lines from file with lazy evaluation
+def Normalize(text: str):
+    #Generator that yields normalized lines one at a time
+    f = text.splitlines()
+    normalizedLines = []
+    for i in f:
+        cleaned = " ".join(i.split())
+        normalized = cleaned.lower().strip()
+        normalizedLines.append(normalized)
+    return normalizedLines
+
+# add a compact on-demand line cache to avoid materializing all lines
+class LineCache:
+    def __init__(self, path, encoding='utf-8'):
+        self.path = path
+        self.encoding = encoding
+        # open file in binary mode and build offsets (small memory: 8 bytes * #lines)
+        self._f = open(path, 'rb')
+        self._offsets = []
+        pos = self._f.tell()
+        line = self._f.readline()
+        while line:
+            self._offsets.append(pos)
+            pos = self._f.tell()
+            line = self._f.readline()
+        self._len = len(self._offsets)
+
+    def __len__(self):
+        return self._len
+
+    def __getitem__(self, idx):
+        if idx < 0:
+            idx += self._len
+        if idx < 0 or idx >= self._len:
+            raise IndexError("LineCache index out of range")
+        self._f.seek(self._offsets[idx])
+        bline = self._f.readline()
+        try:
+            line = bline.decode(self.encoding, errors='replace')
+        except Exception:
+            line = bline.decode('latin-1', errors='replace')
+        cleaned = " ".join(line.split())
+        return cleaned.lower().strip()
+
+    def close(self):
+        try:
+            self._f.close()
+        except Exception:
+            pass
 
 # Operations
 MATCH = 'M'
@@ -74,18 +177,61 @@ def cosineSimilarity(s1, s2):
     
     return dotProduct / (vlen1 * vlen2)
 
+def get_commit_message_for_line(filepath, line_num):
+    """Get the commit message that last modified a specific line using git blame."""
+    try:
+        # git blame returns: <hash> (<author> <date> <time> <tz> <line_num>) <line_content>
+        result = subprocess.run(
+            ['git', 'blame', '-L', f'{line_num},{line_num}', '--porcelain', filepath],
+            cwd=subprocess.os.path.dirname(filepath) or '.',
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+        
+        lines = result.stdout.strip().split('\n')
+        if not lines or not lines[0]:
+            return None
+        
+        # Extract commit hash from first line
+        commit_hash = lines[0].split()[0]
+        
+        # Get full commit message
+        msg_result = subprocess.run(
+            ['git', 'log', '-1', '--pretty=%B', commit_hash],
+            cwd=subprocess.os.path.dirname(filepath) or '.',
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return msg_result.stdout.strip() if msg_result.returncode == 0 else None
+    except Exception:
+        return None
 
-
-if __name__ == '__main__':
-    program = sys.argv[0] # CLI implementation | IMPORTANT: REPLACE WITH GUI 
-    if len(sys.argv) < 3:
-        print(f"Command: program <file1> <file2>")
-        print(f"ERROR: Invalid arg count: 2 files required")
-        exit(1)
+def classify_change_by_commit_message(commit_msg):
+    """Classify change based on commit message keywords."""
+    if not commit_msg:
+        return 'unknown'
     
-    # store files as line arrays
-    file1 = normalize(sys.argv[1])
-    file2 = normalize(sys.argv[2])
+    msg_lower = commit_msg.lower()
+    
+    fix_keywords = ['fix', 'bug', 'patch', 'hotfix', 'resolve', 'issue', 'crash', 'error', 'revert', 'optimization']
+    intro_keywords = ['feature', 'add', 'new', 'implement', 'refactor', 'wip', 'todo', 'draft']
+    
+    fix_score = sum(1 for kw in fix_keywords if kw in msg_lower)
+    intro_score = sum(1 for kw in intro_keywords if kw in msg_lower)
+    
+    if fix_score > intro_score:
+        return 'bug_fix'
+    elif intro_score > fix_score:
+        return 'bug_intro'
+    return 'neutral'
+
+def LHDiff(file1, file2):
+    # Materialize only when needed (DP requires indexing)
+    # use on-demand file-backed cache (much smaller peak memory than storing all lines)
     f1 = len(file1)
     f2 = len(file2)
 
@@ -156,66 +302,37 @@ if __name__ == '__main__':
     rightList.reverse()
     mappings.reverse()
 
-    # MAKING CANDIDATE LISTS
-    hashLeft = []
-    hashRight = []
-    # convert lines to corresponding hashes
-    for i in range(len(leftList)):
-        hashLeft.append((leftList[i][0], Simhash(leftList[i][1])))
-
-    for j in range(len(rightList)):
-        hashRight.append((rightList[j][0], Simhash(rightList[j][1])))
+    # MAKING CANDIDATE LISTS (streamed, keep top-K per left line to save memory)
+    # create Simhash tuples for unmapped lines
+    hashLeft = [(ln, Simhash(text)) for ln, text in leftList]
+    hashRight = [(ln, Simhash(text)) for ln, text in rightList]
     
     K = 15 # simhash comparison "constant"
 
-    candidates = []
-    for i in range(len(hashLeft)): # compare all lines of left with all lines of right
-        bestHashes = []
-        for j in range(len(hashRight)):
-            a = hashLeft[i][1].value
-            b = hashRight[j][1].value
-            hammingDistance = bin(a ^ b).count('1') # bit count on XOR of the two hashes
-            if len(bestHashes) > K: 
-                bestHashes.sort(key=lambda x: x[2]) # sort by simhash score
-                if hammingDistance < bestHashes[len(bestHashes) - 1][2]: # if better than worst match 
-                    bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance]) # lines + hash similarity
-            else:
-                bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance])
-        
-        bestHashes.sort(key=lambda x: x[2]) # final sort
-        candidates.append(copy.deepcopy(bestHashes)) # update candidate list
-
-    candidates.sort(key=lambda x: x[0]) 
-
- 
-    # COMBINED SIMILARITY SCORE AND MATCHING
     finalCandidates = []
-    leftMappings = len(candidates) # candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays    
-    for i in range(leftMappings):
-        maxSim = 0
-        for j in range(len(candidates[i])):
-            leftLine = candidates[i][j][0] 
-            rightLine = candidates[i][j][1]
+    # For each left-line, stream over right-lines and keep K best by hamming distance using heapq.nsmallest
+    for left_ln, left_hash in hashLeft:
+        pairs_iter = ((left_ln, right_ln, bin(left_hash.value ^ right_hash.value).count('1'))
+                      for right_ln, right_hash in hashRight)
+        best_hashes = heapq.nsmallest(K, pairs_iter, key=lambda x: x[2])
 
+        # compute combined similarity immediately for the kept candidates (avoid storing huge candidate matrix)
+        for leftLine, rightLine, _sim in best_hashes:
             # CONTENT SIMILARITY SCORE
             contentSim = 1 - normalLevenshtein(file1[leftLine - 1], file2[rightLine - 1])
-            candidates[i][j][2] = 0.6 * contentSim
+            score = 0.6 * contentSim
 
-            # CONTEXT SIMILARITY SCORE
-            leftContext, rightContext = "", ""
-            # (max) range of 4 lines before, target line, 4 lines after (MAX: 9 lines)
+            # CONTEXT SIMILARITY SCORE (build context strings using generator + join to be slightly lighter)
             leftContextInterval = range(max(leftLine - 4, 1), min(leftLine + 4, f1) + 1)
-            rightContextInterval = range(max(rightLine - 4, 1), min(rightLine + 4, f2) + 1) 
-            for n in leftContextInterval:
-                if file1[n - 1] != "":
-                    leftContext += (file1[n - 1] + "\n")
-            for m in rightContextInterval:
-                if file2[m - 1] != "":
-                    rightContext += (file2[m - 1] + "\n")
+            rightContextInterval = range(max(rightLine - 4, 1), min(rightLine + 4, f2) + 1)
+            leftContext = "\n".join(file1[n - 1] for n in leftContextInterval if file1[n - 1] != "")
+            rightContext = "\n".join(file2[m - 1] for m in rightContextInterval if file2[m - 1] != "")
             
             contextSim = cosineSimilarity(leftContext, rightContext)
-            candidates[i][j][2] += 0.4 * contextSim
-            if candidates[i][j][2] > 0.45: finalCandidates.append(candidates[i][j]) #Filter out bad mappings (below 0.45 threshold)
+            score += 0.4 * contextSim
+
+            if score > 0.45:
+                finalCandidates.append([leftLine, rightLine, score])
 
     #SELECT BEST MAPPINGS (INJECTIVE A -> B with no repeats or overlapping)
     finalCandidates.sort(reverse=True, key=lambda x: x[2]) #IMPORTANT TO SORT THE CANDIDATES IN DESCENDING ORDER
@@ -260,6 +377,7 @@ if __name__ == '__main__':
 
     # NEXT: LINE SPLIT DETECTION
     # admittedly kind of a mess (most convoluted section): trying to iterate through the unmapped lines from right list, their concatenations
+    maxLineSplitSim = 0
     if leftList:
         for l in leftList:
             lineSplitsRight = []
@@ -287,11 +405,97 @@ if __name__ == '__main__':
                 
                 subLineSplits.insert(0, maxLineSplitSim) # levenshtein score to front for easy access
                 lineSplitsRight.append(subLineSplits)
-            print(maxLineSplitSim)
+
             if maxLineSplitSim > 0.85: # VERY HIGH THRESHOLD FOR LINE SPLIT MAPPINGS
                 lineSplitsRight.sort(reverse=True)
                 mappings.append((l[0], lineSplitsRight[0][1:])) #add best multi-line mapping to specific left list line to list
 
+            #might need to consider implementing logic for edge cases where leftlist lines overlap on their mappings to rightlist line splits? (unlikely)
+
     # From some tests, many line splits are not mapped because parts of them are directly mapped instead (threshold for regular mappings might be too low)
     mappings.sort()
-    print(mappings) #FINAL OUTPUT!!!!
+    
+    # Classify each mapping by commit message using git blame
+    classifications = []
+    for m in mappings:
+        if isinstance(m[1], list):
+            # Line split: check first line in the split
+            commit_msg = get_commit_message_for_line(sys.argv[2], m[1][0])
+        else:
+            # Single line: check the mapped line in file2
+            commit_msg = get_commit_message_for_line(sys.argv[2], m[1])
+        
+        ctype = classify_change_by_commit_message(commit_msg)
+        classifications.append(ctype)
+    
+    # Aggregate classifications to determine overall commit type
+    bug_fixes = classifications.count('bug_fix')
+    bug_intros = classifications.count('bug_intro')
+    neutrals = classifications.count('neutral')
+    unknowns = classifications.count('unknown')
+    
+    # Determine overall commit classification
+    if bug_fixes > bug_intros:
+        overall_type = 'bug_fix'
+    elif bug_intros > bug_fixes:
+        overall_type = 'bug_intro'
+    else:
+        overall_type = 'neutral'
+    
+    # Print summary
+    print(f"COMMIT CLASSIFICATION: {overall_type}")
+    print(f"  Bug fixes: {bug_fixes}")
+    print(f"  Bug introductions: {bug_intros}")
+    print(f"  Neutral: {neutrals}")
+    print(f"  Unknown: {unknowns}")
+    print(f"  Total mappings: {len(mappings)}")
+    
+    # close file handles held by caches
+    try:
+        file1.close()
+        file2.close()
+    except Exception:
+        pass
+    
+    mappings.sort()
+    return mappings
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    root.title("LHdiff")
+
+    top = tk.Frame(root)
+    top.pack(fill="x", padx=10, pady=10)
+    top.grid_columnconfigure(0, weight=1)
+    top.grid_columnconfigure(1, weight=1)
+
+    oldEntry = InputGUI(top, "Enter the old file: ", 0)
+    newEntry = InputGUI(top, "Enter the new file: ", 1)
+
+    error = tk.Label(top, text="", fg="red")
+    error.grid(row=3, column=0, columnspan=2)
+
+    bottom = tk.Frame(root)
+    bottom.pack(fill="both", expand=True)
+
+    left = tk.Frame(bottom)
+    right = tk.Frame(bottom)
+    left.pack(side="left", fill="both", expand=True)
+    right.pack(side="right", fill="both", expand=True)
+
+    tk.Label(left, text="Old File:", font=("Arial", 16, "bold")).pack(anchor="w")
+    tk.Label(right, text="New File:", font=("Arial", 16, "bold")).pack(anchor="w")
+
+    oldText = tk.Text(left, wrap="word")
+    oldText.pack(side="left", fill="both", expand=True)
+
+    newText = tk.Text(right, wrap="word")
+    newText.pack(side="right", fill="both", expand=True)
+
+    tk.Button(
+        top, 
+        text="Enter", 
+        command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText, error)
+    ).grid(row=2, column=0, columnspan=2, pady=10)
+
+    root.mainloop()
