@@ -7,12 +7,28 @@ def InputGUI(frame, message, row):
     entry.grid(row=row, column=1, padx=5)
     return entry
 
-def ButtonGUI(oldEntry, newEntry, oldText, newText):
+def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
     fpOld = oldEntry.get().strip()
     fpNew = newEntry.get().strip()
+    # Clears the previous message
+    error.config(text="")
+
+    if fpOld == "" or fpNew == "":
+        error.config(text="Please enter both files") 
+        return
 
     oldFile = File("old", fpOld)
     newFile = File("new", fpNew)
+
+    if not(oldFile) and not(newFile):
+        error.config(text="Old and new files not found, please try again")
+        return
+    elif not(oldFile):
+        error.config(text="Old file not found, please try again")
+        return
+    elif not(newFile):
+        error.config(text="New file not found, please try again")
+        return
 
     oldText.delete("1.0", tk.END)
     oldText.insert("1.0", oldFile)
@@ -42,7 +58,8 @@ def File(x, fp):
         file = open(dirPath, "r")
         return file.read()
     except FileNotFoundError:
-        print("File not found.")
+        return 0
+
 
 root = tk.Tk()
 root.title("LHdiff")
@@ -52,6 +69,9 @@ top.pack(fill="x", padx=10, pady=10)
 
 oldEntry = InputGUI(top, "Enter the old file: ", 0)
 newEntry = InputGUI(top, "Enter the new file: ", 1)
+
+error = tk.Label(top, text="", fg="red")
+error.grid(row=2, column=0, columnspan=2, pady=(0,5))
 
 bottom = tk.Frame(root)
 bottom.pack(fill="both", expand=True)
@@ -70,6 +90,6 @@ oldText.pack(side="left", fill="both", expand=True)
 newText = tk.Text(right, wrap="word")
 newText.pack(side="right", fill="both", expand=True)
 
-tk.Button(top, text="Enter", command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText)).grid(row=2, column=0, columnspan=2, pady=5)
+tk.Button(top, text="Enter", command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText, error)).grid(row=3, column=0, columnspan=2, pady=5)
 
 root.mainloop()
