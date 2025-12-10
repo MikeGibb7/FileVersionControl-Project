@@ -4,24 +4,22 @@ import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
 import heapq
+import time
+import psutil
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
 # LHDiff paper: https://www.cs.usask.ca/~croy/papers/2013/LHDiffFullPaper-preprint.pdf
 # very useful paper: http://www.xmailserver.org/diff2.pdf
 
-# PREPROCESSING: return each file as a list of normalized lines
+# PREPROCESSING: stream normalized lines from file with lazy evaluation
 def normalize(filepath):
-    with open(filepath) as f:
-        lines = f.read().splitlines()
-
-        normalizedLines = []
-        for line in lines:
+    #Generator that yields normalized lines one at a time
+    with open(filepath, encoding='utf-8', buffering=8192) as f:  # 8KB buffer for faster I/O
+        for line in f:
             cleaned = " ".join(line.split())
             normalized = cleaned.lower().strip()
-            normalizedLines.append(normalized)
-        return normalizedLines # lowercase, padding removed, redundant internal whitespace removed
-    # empty lines are NOT discarded (preserved for line numbering, but practically ignored)
+            yield normalized
 
 # Operations
 MATCH = 'M'
@@ -75,18 +73,44 @@ def cosineSimilarity(s1, s2):
     
     return dotProduct / (vlen1 * vlen2)
 
+def profile_io(filepath, report_every=10000):
+    """Stream the file using normalize() and report time + RSS memory periodically."""
+    proc = psutil.Process()
+    start_mem = proc.memory_info().rss
+    start_t = time.perf_counter()
+    count = 0
+    print(f"START IO PROFILE: {filepath} start_mem={start_mem} bytes")
+    for line in normalize(filepath):
+        count += 1
+        if (count % report_every) == 0:
+            cur_mem = proc.memory_info().rss
+            elapsed = time.perf_counter() - start_t
+            print(f"READ {count} lines; elapsed={elapsed:.3f}s; MEM={cur_mem} bytes")
+    elapsed = time.perf_counter() - start_t
+    end_mem = proc.memory_info().rss
+    print(f"END IO PROFILE: {filepath} lines={count} elapsed={elapsed:.3f}s start_mem={start_mem} end_mem={end_mem} bytes")
 
 
 if __name__ == '__main__':
     program = sys.argv[0] # CLI implementation | IMPORTANT: REPLACE WITH GUI 
+    if '--profile-io' in sys.argv:
+        # usage: python LHdiff.py --profile-io file1 [file2 ...]
+        idx = sys.argv.index('--profile-io')
+        targets = sys.argv[idx + 1:]
+        if not targets:
+            print("Usage: python LHdiff.py --profile-io <file1> [file2 ...]")
+            sys.exit(1)
+        for t in targets:
+            profile_io(t)
+        sys.exit(0)
     if len(sys.argv) < 3:
         print(f"Command: program <file1> <file2>")
         print(f"ERROR: Invalid arg count: 2 files required")
         exit(1)
     
-    # store files as line arrays
-    file1 = normalize(sys.argv[1])
-    file2 = normalize(sys.argv[2])
+    # Materialize only when needed (DP requires indexing)
+    file1 = list(normalize(sys.argv[1]))
+    file2 = list(normalize(sys.argv[2]))
     f1 = len(file1)
     f2 = len(file2)
 
