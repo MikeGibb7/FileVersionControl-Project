@@ -43,8 +43,6 @@ def File(x, fp):
         return file.read()
     except FileNotFoundError:
         print("File not found.")
-        exit(1)
-
 
 root = tk.Tk()
 root.title("LHdiff")
@@ -58,10 +56,18 @@ newEntry = InputGUI(top, "Enter the new file: ", 1)
 bottom = tk.Frame(root)
 bottom.pack(fill="both", expand=True)
 
-oldText = tk.Text(bottom, wrap="word")
+left = tk.Frame(bottom)
+right = tk.Frame(bottom)
+left.pack(side="left", fill="both", expand=True)
+right.pack(side="right", fill="both", expand=True)
+
+tk.Label(left, text="Old File:", font=("Arial", 16, "bold")).pack(anchor="w")
+tk.Label(right, text="New File:", font=("Arial", 16, "bold")).pack(anchor="w")
+
+oldText = tk.Text(left, wrap="word")
 oldText.pack(side="left", fill="both", expand=True)
 
-newText = tk.Text(bottom, wrap="word")
+newText = tk.Text(right, wrap="word")
 newText.pack(side="right", fill="both", expand=True)
 
 tk.Button(top, text="Enter", command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText)).grid(row=2, column=0, columnspan=2, pady=5)
