@@ -3,6 +3,7 @@ import copy
 import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
+import heapq
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
@@ -156,66 +157,37 @@ if __name__ == '__main__':
     rightList.reverse()
     mappings.reverse()
 
-    # MAKING CANDIDATE LISTS
-    hashLeft = []
-    hashRight = []
-    # convert lines to corresponding hashes
-    for i in range(len(leftList)):
-        hashLeft.append((leftList[i][0], Simhash(leftList[i][1])))
-
-    for j in range(len(rightList)):
-        hashRight.append((rightList[j][0], Simhash(rightList[j][1])))
+    # MAKING CANDIDATE LISTS (streamed, keep top-K per left line to save memory)
+    # create Simhash tuples for unmapped lines
+    hashLeft = [(ln, Simhash(text)) for ln, text in leftList]
+    hashRight = [(ln, Simhash(text)) for ln, text in rightList]
     
     K = 15 # simhash comparison "constant"
 
-    candidates = []
-    for i in range(len(hashLeft)): # compare all lines of left with all lines of right
-        bestHashes = []
-        for j in range(len(hashRight)):
-            a = hashLeft[i][1].value
-            b = hashRight[j][1].value
-            hammingDistance = bin(a ^ b).count('1') # bit count on XOR of the two hashes
-            if len(bestHashes) > K: 
-                bestHashes.sort(key=lambda x: x[2]) # sort by simhash score
-                if hammingDistance < bestHashes[len(bestHashes) - 1][2]: # if better than worst match 
-                    bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance]) # lines + hash similarity
-            else:
-                bestHashes.append([hashLeft[i][0], hashRight[j][0], hammingDistance])
-        
-        bestHashes.sort(key=lambda x: x[2]) # final sort
-        candidates.append(copy.deepcopy(bestHashes)) # update candidate list
-
-    candidates.sort(key=lambda x: x[0]) 
-
- 
-    # COMBINED SIMILARITY SCORE AND MATCHING
     finalCandidates = []
-    leftMappings = len(candidates) # candidate mappings are grouped into subarrays based on left list lines | this is the number of those subarrays    
-    for i in range(leftMappings):
-        maxSim = 0
-        for j in range(len(candidates[i])):
-            leftLine = candidates[i][j][0] 
-            rightLine = candidates[i][j][1]
+    # For each left-line, stream over right-lines and keep K best by hamming distance using heapq.nsmallest
+    for left_ln, left_hash in hashLeft:
+        pairs_iter = ((left_ln, right_ln, bin(left_hash.value ^ right_hash.value).count('1'))
+                      for right_ln, right_hash in hashRight)
+        best_hashes = heapq.nsmallest(K, pairs_iter, key=lambda x: x[2])
 
+        # compute combined similarity immediately for the kept candidates (avoid storing huge candidate matrix)
+        for leftLine, rightLine, _sim in best_hashes:
             # CONTENT SIMILARITY SCORE
             contentSim = 1 - normalLevenshtein(file1[leftLine - 1], file2[rightLine - 1])
-            candidates[i][j][2] = 0.6 * contentSim
+            score = 0.6 * contentSim
 
-            # CONTEXT SIMILARITY SCORE
-            leftContext, rightContext = "", ""
-            # (max) range of 4 lines before, target line, 4 lines after (MAX: 9 lines)
+            # CONTEXT SIMILARITY SCORE (build context strings using generator + join to be slightly lighter)
             leftContextInterval = range(max(leftLine - 4, 1), min(leftLine + 4, f1) + 1)
-            rightContextInterval = range(max(rightLine - 4, 1), min(rightLine + 4, f2) + 1) 
-            for n in leftContextInterval:
-                if file1[n - 1] != "":
-                    leftContext += (file1[n - 1] + "\n")
-            for m in rightContextInterval:
-                if file2[m - 1] != "":
-                    rightContext += (file2[m - 1] + "\n")
+            rightContextInterval = range(max(rightLine - 4, 1), min(rightLine + 4, f2) + 1)
+            leftContext = "\n".join(file1[n - 1] for n in leftContextInterval if file1[n - 1] != "")
+            rightContext = "\n".join(file2[m - 1] for m in rightContextInterval if file2[m - 1] != "")
             
             contextSim = cosineSimilarity(leftContext, rightContext)
-            candidates[i][j][2] += 0.4 * contextSim
-            if candidates[i][j][2] > 0.45: finalCandidates.append(candidates[i][j]) #Filter out bad mappings (below 0.45 threshold)
+            score += 0.4 * contextSim
+
+            if score > 0.45:
+                finalCandidates.append([leftLine, rightLine, score])
 
     #SELECT BEST MAPPINGS (INJECTIVE A -> B with no repeats or overlapping)
     finalCandidates.sort(reverse=True, key=lambda x: x[2]) #IMPORTANT TO SORT THE CANDIDATES IN DESCENDING ORDER
