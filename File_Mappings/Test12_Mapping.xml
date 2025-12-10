@@ -23,7 +23,6 @@
         <LOCATION ORIG="69" NEW="69"/>
         <LOCATION ORIG="70" NEW="70"/>
         <LOCATION ORIG="71" NEW="71"/>
-        <LOCATION ORIG="72" NEW="72"/>
     </VERSION>
 
     <VERSION NUMBER="2" CHECKED="TRUE">
@@ -31,25 +30,24 @@
         <LOCATION ORIG="51" NEW="51"/>
         <LOCATION ORIG="52" NEW="52"/>
         <LOCATION ORIG="53" NEW="53"/>
-        <LOCATION ORIG="54" NEW="54"/>
-        <LOCATION ORIG="55" NEW="55"/>
-        <LOCATION ORIG="56" NEW="56"/>
+        <LOCATION ORIG="54" NEW="-1"/>
+        <LOCATION ORIG="55" NEW="-1"/>
+        <LOCATION ORIG="56" NEW="-1"/>
         <LOCATION ORIG="57" NEW="57"/>
         <LOCATION ORIG="58" NEW="58"/>
-        <LOCATION ORIG="59" NEW="63"/>
-        <LOCATION ORIG="60" NEW="64"/>
-        <LOCATION ORIG="61" NEW="65"/>
-        <LOCATION ORIG="62" NEW="66"/>
-        <LOCATION ORIG="63" NEW="67"/>
-        <LOCATION ORIG="64" NEW="68"/>
-        <LOCATION ORIG="65" NEW="69"/>  
-        <LOCATION ORIG="66" NEW="70"/>
-        <LOCATION ORIG="67" NEW="71"/>
-        <LOCATION ORIG="68" NEW="72"/>
-        <LOCATION ORIG="69" NEW="73"/>
-        <LOCATION ORIG="70" NEW="74"/>
-        <LOCATION ORIG="71" NEW="75"/>
-        <LOCATION ORIG="72" NEW="76"/>
+        <LOCATION ORIG="59" NEW="59"/>
+        <LOCATION ORIG="60" NEW="63"/>
+        <LOCATION ORIG="61" NEW="64"/>
+        <LOCATION ORIG="62" NEW="65"/>
+        <LOCATION ORIG="63" NEW="66"/>
+        <LOCATION ORIG="64" NEW="67"/>
+        <LOCATION ORIG="65" NEW="68"/>  
+        <LOCATION ORIG="66" NEW="69"/>
+        <LOCATION ORIG="67" NEW="70"/>
+        <LOCATION ORIG="68" NEW="71"/>
+        <LOCATION ORIG="69" NEW="72"/>
+        <LOCATION ORIG="70" NEW="73"/>
+        <LOCATION ORIG="71" NEW="74"/>
     </VERSION>
 
 </TEST>
