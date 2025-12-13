@@ -25,7 +25,6 @@
     </VERSION>
 
     <VERSION NUMBER="2" CHECKED="TRUE">
-    <VERSION NUMBER="1" CHECKED="TRUE">
         <LOCATION ORIG="1" NEW="1"/>
         <LOCATION ORIG="3" NEW="3"/>
         <LOCATION ORIG="4" NEW="4"/>
