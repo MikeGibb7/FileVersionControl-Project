@@ -19,7 +19,7 @@ def InputGUI(frame, message, col):
     entry.grid(row=1, column=col, padx=10)
     return entry
 
-def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
+def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
     global fpOld, fpNew
     fpOld = oldEntry.get().strip()
     fpNew = newEntry.get().strip()
@@ -54,8 +54,10 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error):
     # Pass full file paths so git blame can work in the GUI
     old_full_path = path.join(path.dirname(path.abspath(__file__)), "Old_File_Versions", fpOld)
     new_full_path = path.join(path.dirname(path.abspath(__file__)), "New_File_Versions", fpNew)
+    
     lhDiff = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
-    print(lhDiff)
+    map.delete("1.0", tk.END)
+    map.insert("1.0", lhDiff)
     
 def File(x, fp):
     # Folder with the GUI's directory. 
@@ -484,11 +486,11 @@ if __name__ == '__main__':
     error = tk.Label(top, text="", fg="red")
     error.grid(row=3, column=0, columnspan=2)
 
-    bottom = tk.Frame(root)
-    bottom.pack(fill="both", expand=True)
+    middle = tk.Frame(root)
+    middle.pack(fill="both", expand=True)
 
-    left = tk.Frame(bottom)
-    right = tk.Frame(bottom)
+    left = tk.Frame(middle)
+    right = tk.Frame(middle)
     left.pack(side="left", fill="both", expand=True)
     right.pack(side="right", fill="both", expand=True)
 
@@ -501,10 +503,17 @@ if __name__ == '__main__':
     newText = tk.Text(right, wrap="word")
     newText.pack(side="right", fill="both", expand=True)
 
+
+    bottom = tk.Frame(root)
+    bottom.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+    tk.Label(bottom, text="Result: ", font=("Arial", 16, "bold")).pack(anchor="w")
+    map = tk.Text(bottom, height=10, wrap="word")
+    map.pack(fill="both", expand=True)
+
     tk.Button(
         top, 
         text="Enter", 
-        command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText, error)
+        command=lambda:ButtonGUI(oldEntry, newEntry, oldText, newText, error, map)
     ).grid(row=2, column=0, columnspan=2, pady=10)
-
+    
     root.mainloop()
