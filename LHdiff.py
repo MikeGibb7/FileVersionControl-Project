@@ -122,7 +122,7 @@ def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
     # Deletions
     map.insert("end", "Deleted lines:\n")
     if deletions:
-        for i, j in insertions:
+        for i, j in deletions:
             if (i-1) < len(splitFile1):
                 data = splitFile1[i-1].lstrip()
             else:
