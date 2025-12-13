@@ -55,9 +55,85 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
     old_full_path = path.join(path.dirname(path.abspath(__file__)), "Old_File_Versions", fpOld)
     new_full_path = path.join(path.dirname(path.abspath(__file__)), "New_File_Versions", fpNew)
     
-    lhDiff = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
+    mappings, leftList, rightList = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
     map.delete("1.0", tk.END)
-    map.insert("1.0", lhDiff)
+    MappingResults(map, oldFile, newFile, mappings, leftList, rightList)
+
+def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
+    splitFile1 = oldFile.splitlines()
+    splitFile2 = newFile.splitlines()
+
+    # Swaps and moves
+    map.insert("end", "Moved or swapped lines:\n")
+    moves = False
+    for i, j in mappings:
+        if isinstance(j, list):
+            moves = True
+            if (i-1) < len(splitFile1):
+                oldText = splitFile1[i-1]
+            else:
+                oldText = ""
+            map.insert("end", f"old line {i} moved to new line {j}\n")
+            map.insert("end", f"\t- {oldText}\n")
+            for k in j:
+                if (k-1) < len(splitFile2):
+                    newText = splitFile2[k-1].lstrip()
+                else:
+                    newText = ""
+                map.insert("end", f"\t+ old line {i} moved to new {j}\n")
+            map.insert("end", "\n")
+        else:
+            if i != j:
+                moves = True
+                if (i-1) < len(splitFile1):
+                    oldText = splitFile1[i-1].lstrip()
+                else:
+                    oldText = ""
+                if (j-1) < len(splitFile2):
+                    newText = splitFile2[j-1].lstrip()
+                else:
+                    newText = ""
+
+                if (oldText == newText):
+                    map.insert("end", f"old line {i} swapped with new line {j}\n")
+                    map.insert("end", f"\t-/+ {oldText}\n")
+                else:
+                    map.insert("end", f"old line {i} swapped with new line {j}\n")
+                    map.insert("end", f"\t- {oldText}\n")
+                    map.insert("end", f"\t+ {newText}\n\n")
+    if not(moves):
+        map.insert("end", "N/A\n")
+    else:
+        map.insert("end", "\n")
+    
+    # Insertions
+    map.insert("end", "Inserted lines:\n")
+    if insertions:
+        for i, k in insertions:
+            if (i-1) < len(splitFile2):
+                data = splitFile2[i-1].lstrip()
+            else:
+                data = ""
+            map.insert("end", f"+ {i}: {data}\n")
+        map.insert("end", "\n")
+    else:
+        map.insert("end", "N/A\n\n")
+    
+    # Deletions
+    map.insert("end", "Deleted lines:\n")
+    if deletions:
+        for i, j in insertions:
+            if (i-1) < len(splitFile1):
+                data = splitFile1[i-1].lstrip()
+            else:
+                data = ""
+            map.insert("end", f"+ {i}: {data}\n")
+        map.insert("end", "\n")
+    else:
+        map.insert("end", "N/A\n\n")
+    
+    # Print the mappings.
+    map.insert("end", f"Mappings:\n{mappings}")
     
 def File(x, fp):
     # Folder with the GUI's directory. 
@@ -469,7 +545,7 @@ def LHDiff(file1, file2, old_path=None, new_path=None):
         pass
     
     mappings.sort()
-    return mappings
+    return mappings, leftList, rightList
 
 if __name__ == '__main__':
     root = tk.Tk()
