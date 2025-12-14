@@ -1,5 +1,14 @@
 # LHDiff — A Hybrid, Language-Independent Line Differencing Tool
 
+# Group #4 Members:
+- Michael Gibb (110102732)
+- Ronit Mahajan (110036557)
+- Charbel Nakhoul (110043150)
+- John Ezetah (10469910)
+- Nico Bellanger (110138244)
+
+## Introduction
+
 LHDiff is a Python implementation of the algorithm described in **“LHDiff: A Language-Independent Hybrid Approach for Code Differencing”** by Asaduzzaman et al. (2013).
 
 This tool detects line-level changes between two text files (source code or plain text) using a hybrid strategy that combines:
