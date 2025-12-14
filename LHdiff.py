@@ -57,11 +57,23 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
     
     mappings, leftList, rightList = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
     map.delete("1.0", tk.END)
-    MappingResults(map, oldFile, newFile, mappings, leftList, rightList)
+    MappingResults(map, oldFile, newFile, oldText, newText, mappings, leftList, rightList)
 
-def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
+def MappingResults(map, oldFile, newFile, oldText, newText, mappings, deletions, insertions):
     splitFile1 = oldFile.splitlines()
     splitFile2 = newFile.splitlines()
+
+    # Setting up Highlights
+    oldText.tag_configure("del", background ="#ffb3b3")  # Red
+    oldText.tag_configure("move", background ="#b3d9ff") # Blue
+    newText.tag_configure("move", background ="#b3d9ff") # Blue, again
+    newText.tag_configure("ins", background ="#b8ffb8") # Green
+
+    # Clearing any prior highlights
+    for i in ("del", "move"):
+        oldText.tag_remove(i, "1.0", "end")
+    for i in ("ins", "move"):
+        newText.tag_remove(i, "1.0", "end")
 
     # Swaps and moves
     map.insert("end", "Moved or swapped lines:\n")
@@ -69,38 +81,43 @@ def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
     for i, j in mappings:
         if isinstance(j, list):
             moves = True
+
+            oldText.tag_add("move", f"{i}.0", f"{i}.end")
             if (i-1) < len(splitFile1):
-                oldText = splitFile1[i-1]
+                oldData = splitFile1[i-1]
             else:
-                oldText = ""
+                oldData = ""
             map.insert("end", f"old line {i} moved to new line {j}\n")
-            map.insert("end", f"\t- {oldText}\n")
+            map.insert("end", f"\t- {oldData}\n")
             for k in j:
+                newText.tag_add("move", f"{k}.0", f"{k}.end")
                 if (k-1) < len(splitFile2):
-                    newText = splitFile2[k-1].lstrip()
+                    newData = splitFile2[k-1].lstrip()
                 else:
-                    newText = ""
+                    newData = ""
                 map.insert("end", f"\t+ old line {i} moved to new {j}\n")
             map.insert("end", "\n")
         else:
             if i != j:
                 moves = True
+                oldText.tag_add("move", f"{i}.0", f"{i}.end")
+                newText.tag_add("move", f"{j}.0", f"{j}.end")
                 if (i-1) < len(splitFile1):
-                    oldText = splitFile1[i-1].lstrip()
+                    oldData = splitFile1[i-1].lstrip()
                 else:
-                    oldText = ""
+                    oldData = ""
                 if (j-1) < len(splitFile2):
-                    newText = splitFile2[j-1].lstrip()
+                    newData = splitFile2[j-1].lstrip()
                 else:
-                    newText = ""
+                    newData = ""
 
-                if (oldText == newText):
+                if (oldData == newData):
                     map.insert("end", f"old line {i} swapped with new line {j}\n")
-                    map.insert("end", f"\t-/+ {oldText}\n")
+                    map.insert("end", f"\t-/+ {oldData}\n")
                 else:
                     map.insert("end", f"old line {i} swapped with new line {j}\n")
-                    map.insert("end", f"\t- {oldText}\n")
-                    map.insert("end", f"\t+ {newText}\n\n")
+                    map.insert("end", f"\t- {oldData}\n")
+                    map.insert("end", f"\t+ {newData}\n\n")
     if not(moves):
         map.insert("end", "N/A\n")
     else:
@@ -110,6 +127,7 @@ def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
     map.insert("end", "Inserted lines:\n")
     if insertions:
         for i, k in insertions:
+            newText.tag_add("ins", f"{i}.0", f"{i}.end")
             if (i-1) < len(splitFile2):
                 data = splitFile2[i-1].lstrip()
             else:
@@ -123,6 +141,7 @@ def MappingResults(map, oldFile, newFile, mappings, deletions, insertions):
     map.insert("end", "Deleted lines:\n")
     if deletions:
         for i, j in deletions:
+            oldText.tag_add("del", f"{i}.0", f"{i}.end")
             if (i-1) < len(splitFile1):
                 data = splitFile1[i-1].lstrip()
             else:
