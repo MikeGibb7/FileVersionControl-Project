@@ -1,11 +1,11 @@
 # LHDiff — A Hybrid, Language-Independent Line Differencing Tool
 
 # Group #4 Members:
-- Michael Gibb (110102732)
-- Ronit Mahajan (110036557)
-- Charbel Nakhoul (110043150)
+- Michael Gibb[MikeGibb7] (110102732)
+- Ronit Mahajan[TheSupremeXtream] (110036557)
+- Charbel Nakhoul[nakhoulc] (110043150)
 - John Ezetah[Vanvians] (10469910)
-- Nico Bellanger (110138244)
+- Nico Belanger[Nico Belanger] (110138244)
 
 ## Introduction
 
