@@ -602,7 +602,7 @@ if __name__ == '__main__':
     bottom = tk.Frame(root)
     bottom.pack(fill="both", expand=True, padx=10, pady=(0, 10))
     tk.Label(bottom, text="Result: ", font=("Arial", 16, "bold")).pack(anchor="w")
-    map = tk.Text(bottom, height=10, wrap="word")
+    map = tk.Text(bottom, wrap="word")
     map.pack(fill="both", expand=True)
 
     tk.Button(
