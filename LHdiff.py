@@ -56,6 +56,7 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
     new_full_path = path.join(path.dirname(path.abspath(__file__)), "New_File_Versions", fpNew)
     
     mappings, leftList, rightList = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
+    print(mappings)
     map.delete("1.0", tk.END)
     MappingResults(map, oldFile, newFile, oldText, newText, mappings, leftList, rightList)
 
