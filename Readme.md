@@ -4,7 +4,7 @@
 - Michael Gibb (110102732)
 - Ronit Mahajan (110036557)
 - Charbel Nakhoul (110043150)
-- John Ezetah (10469910)
+- John Ezetah[Vanvians] (10469910)
 - Nico Bellanger (110138244)
 
 ## Introduction
