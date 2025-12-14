@@ -7,6 +7,8 @@ import heapq
 import tkinter as tk
 import os.path as path
 import subprocess
+import threading
+import re
 
 # REMINDER: TRY TO REFACTOR ALL INSTANCES OF LEVENSHTEIN AT SOME POINT
 
@@ -19,7 +21,7 @@ def InputGUI(frame, message, col):
     entry.grid(row=1, column=col, padx=10)
     return entry
 
-def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
+def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map_widget):
     global fpOld, fpNew
     fpOld = oldEntry.get().strip()
     fpNew = newEntry.get().strip()
@@ -55,10 +57,25 @@ def ButtonGUI(oldEntry, newEntry, oldText, newText, error, map):
     old_full_path = path.join(path.dirname(path.abspath(__file__)), "Old_File_Versions", fpOld)
     new_full_path = path.join(path.dirname(path.abspath(__file__)), "New_File_Versions", fpNew)
     
-    mappings, leftList, rightList = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
-    print(mappings)
-    map.delete("1.0", tk.END)
-    MappingResults(map, oldFile, newFile, oldText, newText, mappings, leftList, rightList)
+    # run expensive diff+blame in a background thread to keep UI responsive
+    def worker():
+        maps, lefts, rights = LHDiff(file1, file2, old_path=old_full_path, new_path=new_full_path)
+        # update UI on main thread
+        def on_done():
+            # populate the results map widget and highlights
+            map_widget.delete("1.0", tk.END)
+            MappingResults(map_widget, oldFile, newFile, oldText, newText, maps, lefts, rights)
+            # re-enable entries
+            oldEntry.config(state='normal')
+            newEntry.config(state='normal')
+        root = tk._get_default_root()
+        if root:
+            root.after(0, on_done)
+    
+    # disable entries while working
+    oldEntry.config(state='disabled')
+    newEntry.config(state='disabled')
+    threading.Thread(target=worker, daemon=True).start()
 
 def MappingResults(map, oldFile, newFile, oldText, newText, mappings, deletions, insertions):
     splitFile1 = oldFile.splitlines()
@@ -278,38 +295,73 @@ def cosineSimilarity(s1, s2):
     
     return dotProduct / (vlen1 * vlen2)
 
-def get_commit_message_for_line(filepath, line_num):
-    """Get the commit message that last modified a specific line using git blame."""
+# Cache structures to avoid repeated subprocess calls
+_GIT_BLAME_LINE_CACHE = {}   # filepath -> { line_num: commit_hash }
+_GIT_BLAME_MSG_CACHE = {}    # commit_hash -> commit_message
+
+def _populate_blame_cache(filepath):
+    """Run a single `git blame --porcelain` for filepath and populate line->commit_hash cache."""
+    if filepath in _GIT_BLAME_LINE_CACHE:
+        return
+    line_to_hash = {}
     try:
-        # git blame returns: <hash> (<author> <date> <time> <tz> <line_num>) <line_content>
         result = subprocess.run(
-            ['git', 'blame', '-L', f'{line_num},{line_num}', '--porcelain', filepath],
-            cwd=subprocess.os.path.dirname(filepath) or '.',
+            ['git', 'blame', '--porcelain', filepath],
+            cwd=path.dirname(path.abspath(filepath)) or '.',
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=30
         )
         if result.returncode != 0:
-            return None
-        
-        lines = result.stdout.strip().split('\n')
-        if not lines or not lines[0]:
-            return None
-        
-        # Extract commit hash from first line
-        commit_hash = lines[0].split()[0]
-        
-        # Get full commit message
-        msg_result = subprocess.run(
+            _GIT_BLAME_LINE_CACHE[filepath] = {}
+            return
+
+        lines = result.stdout.splitlines()
+        i = 0
+        while i < len(lines):
+            m = re.match(r'^([0-9a-f]+) (\d+) (\d+)', lines[i])
+            if m:
+                commit_hash = m.group(1)
+                final_lineno = int(m.group(3))
+                line_to_hash[final_lineno] = commit_hash
+                # skip headers until the source line (starts with a tab)
+                i += 1
+                while i < len(lines) and not lines[i].startswith('\t'):
+                    i += 1
+                i += 1
+            else:
+                i += 1
+        _GIT_BLAME_LINE_CACHE[filepath] = line_to_hash
+    except Exception:
+        _GIT_BLAME_LINE_CACHE[filepath] = {}
+
+def _get_commit_message_for_hash(commit_hash, repo_dir):
+    """Return commit message for a commit hash, caching results."""
+    if not commit_hash:
+        return None
+    if commit_hash in _GIT_BLAME_MSG_CACHE:
+        return _GIT_BLAME_MSG_CACHE[commit_hash]
+    try:
+        result = subprocess.run(
             ['git', 'log', '-1', '--pretty=%B', commit_hash],
-            cwd=subprocess.os.path.dirname(filepath) or '.',
+            cwd=repo_dir or '.',
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=10
         )
-        return msg_result.stdout.strip() if msg_result.returncode == 0 else None
+        msg = result.stdout.strip() if result.returncode == 0 else None
     except Exception:
-        return None
+        msg = None
+    _GIT_BLAME_MSG_CACHE[commit_hash] = msg
+    return msg
+
+def get_commit_message_for_line(filepath, line_num):
+    """Get the commit message that last modified a specific line using a cached git blame result."""
+    _populate_blame_cache(filepath)
+    line_map = _GIT_BLAME_LINE_CACHE.get(filepath, {})
+    commit_hash = line_map.get(line_num)
+    repo_dir = path.dirname(path.abspath(filepath)) or '.'
+    return _get_commit_message_for_hash(commit_hash, repo_dir)
 
 def classify_change_by_commit_message(commit_msg):
     """Classify change based on commit message keywords."""

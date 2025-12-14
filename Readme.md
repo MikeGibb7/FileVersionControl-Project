@@ -127,10 +127,24 @@ Mappings:
 (n, m) pairs show all detected matches, moves, and alignments
 
 
-##
+## Optimization results
 
+To check the time complexityyou will need to install snakeviz
 
+```bash
+pip install snakeviz 
+pip install memory_profiler
+```
+Then generate the output files using 
+```bash
+python -m cProfile -o "optimization_results\output.prof" LHdiff.py
+python -m memory_profiler LHdiff.py
 
+```
+Then run the file using
+```bash
+python -m snakeviz optimization_results\output.prof 
+```
 
 
 
