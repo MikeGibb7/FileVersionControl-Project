@@ -129,7 +129,7 @@ Mappings:
 
 ## Optimization results
 
-To check the time complexityyou will need to install snakeviz
+To check the time complexity and memory allocation you will need to install snakeviz
 
 ```bash
 pip install snakeviz 
