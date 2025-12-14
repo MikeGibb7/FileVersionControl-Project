@@ -1,5 +1,4 @@
 import sys
-import copy
 import string
 import math
 from simhash import Simhash # python-Simhash; might be 128-bit?? [add dependency] 
@@ -299,8 +298,8 @@ def cosineSimilarity(s1, s2):
 _GIT_BLAME_LINE_CACHE = {}   # filepath -> { line_num: commit_hash }
 _GIT_BLAME_MSG_CACHE = {}    # commit_hash -> commit_message
 
+#Run a single `git blame --porcelain` for filepath and populate line->commit_hash cache.
 def _populate_blame_cache(filepath):
-    """Run a single `git blame --porcelain` for filepath and populate line->commit_hash cache."""
     if filepath in _GIT_BLAME_LINE_CACHE:
         return
     line_to_hash = {}
@@ -335,8 +334,8 @@ def _populate_blame_cache(filepath):
     except Exception:
         _GIT_BLAME_LINE_CACHE[filepath] = {}
 
+#Return commit message for a commit hash, caching results.
 def _get_commit_message_for_hash(commit_hash, repo_dir):
-    """Return commit message for a commit hash, caching results."""
     if not commit_hash:
         return None
     if commit_hash in _GIT_BLAME_MSG_CACHE:
@@ -355,16 +354,16 @@ def _get_commit_message_for_hash(commit_hash, repo_dir):
     _GIT_BLAME_MSG_CACHE[commit_hash] = msg
     return msg
 
+#Get the commit message that last modified a specific line using a cached git blame result.
 def get_commit_message_for_line(filepath, line_num):
-    """Get the commit message that last modified a specific line using a cached git blame result."""
     _populate_blame_cache(filepath)
     line_map = _GIT_BLAME_LINE_CACHE.get(filepath, {})
     commit_hash = line_map.get(line_num)
     repo_dir = path.dirname(path.abspath(filepath)) or '.'
     return _get_commit_message_for_hash(commit_hash, repo_dir)
 
+#Classify change based on commit message keywords.
 def classify_change_by_commit_message(commit_msg):
-    """Classify change based on commit message keywords."""
     if not commit_msg:
         return 'unknown'
     
